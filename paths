@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Version of the script
-SCRIPT_VERSION="1.0.4"
+SCRIPT_VERSION="1.0.5"
 
 # Display the script's own location
 echo "Script location: $(dirname $(readlink -f $0))"
@@ -19,7 +19,7 @@ check_for_update() {
     SCRIPT_CONTENT=$(curl -s $VERSION_URL)
 
     # Check if the download failed (e.g., 404 Not Found)
-    if echo "$SCRIPT_CONTENT" | grep -q "404: Not Found"; then
+    if [[ "$SCRIPT_CONTENT" == *"404: Not Found"* ]]; then
         echo "Error: Unable to find the script on GitHub. Please check the URL manually:"
         echo "$VERSION_URL"
         return
