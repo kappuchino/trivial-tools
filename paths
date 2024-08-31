@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Version of the script
-SCRIPT_VERSION="1.1.0"
+SCRIPT_VERSION="1.1.1"
 
 # Display the script's own location
 echo "Script location: $(dirname $(readlink -f $0))"
@@ -33,7 +33,7 @@ check_for_update() {
     fi
 
     # Extract the version number from the downloaded script content using a compatible method
-    LATEST_VERSION=$(echo "$SCRIPT_CONTENT" | awk -F'"' '/SCRIPT_VERSION=/ {print $2}')
+    LATEST_VERSION=$(echo "$SCRIPT_CONTENT" | grep -Eo 'SCRIPT_VERSION="[0-9]+\.[0-9]+\.[0-9]+"' | cut -d'"' -f2)
 
     # Function to compare versions (returns 0 if the first version is newer)
     compare_versions() {
@@ -70,6 +70,7 @@ VERSION_URL="https://raw.githubusercontent.com/$GITHUB_USER/$GITHUB_REPO/main/$G
 # Check for updates
 check_for_update
 
+
 # Last fix
 # Version 1.1.x now supports mac os x and debian
-#
+# Version 1.1.1 fixes a glitch in the comparison
