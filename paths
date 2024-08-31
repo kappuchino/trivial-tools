@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Version of the script
+# Version of the script - for Version Sync
 SCRIPT_VERSION="1.1.1"
 
 # Display the script's own location
@@ -9,6 +9,8 @@ echo "Script location: $(dirname $(readlink -f $0))"
 # Shows active paths line by line
 echo "Active paths are:"
 echo $PATH | tr ':' '\n'
+
+# END OF FUNCTION OF THE SCRIPT - FOLLOWING IS ONLY HELP TO SYNC ACROSS SYSTEMS
 
 # Function to check for updates
 check_for_update() {
@@ -74,3 +76,4 @@ check_for_update
 # Last fix
 # Version 1.1.x now supports mac os x and debian
 # Version 1.1.1 fixes a glitch in the comparison
+# Version 1.1.2 contains more details
