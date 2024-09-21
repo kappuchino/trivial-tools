@@ -1,0 +1,85 @@
+#!/bin/bash
+
+# Function to display usage information
+usage() {
+    echo "Usage: findme <search_term> [file|dir|wild]"
+    echo "  <search_term>: The term to search for"
+    echo "  [file|dir|wild]: Optional parameter to specify search type"
+    echo "    - file: Search only for files"
+    echo "    - dir: Search only for directories"
+    echo "    - wild: Search with wildcards before and after the term"
+    echo "    If not specified, it will search for the exact term"
+    echo ""
+    echo "The script will first search upwards from the current directory."
+    echo "If no results are found, it will offer to search from the root directory."
+}
+
+# Function to perform the search
+perform_search() {
+    local start_dir="$1"
+    local results=$(find "$start_dir" -name "$search_term" $search_type 2>/dev/null)
+    echo "$results"
+}
+
+# Check if at least one argument is provided
+if [ $# -eq 0 ]; then
+    usage
+    exit 1
+fi
+
+# Assign the search term from the first argument
+search_term="$1"
+
+# Set the default search type
+search_type=""
+
+# Check if a second argument is provided
+if [ $# -eq 2 ]; then
+    case "$2" in
+        file)
+            search_type="-type f"
+            ;;
+        dir)
+            search_type="-type d"
+            ;;
+        wild)
+            search_term="*${search_term}*"
+            ;;
+        *)
+            echo "Invalid search type. Use 'file', 'dir', or 'wild'."
+            usage
+            exit 1
+            ;;
+    esac
+fi
+
+# Perform upward search
+current_dir="$PWD"
+while [ "$current_dir" != "/" ]; do
+    results=$(perform_search "$current_dir")
+    if [ -n "$results" ]; then
+        echo "Results found in or below directory: $current_dir"
+        echo "$results"
+        exit 0
+    fi
+    current_dir=$(dirname "$current_dir")
+done
+
+# If no results found, ask to search from root
+echo "No results found in parent directories."
+read -p "Do you want to search from the root directory? (y/n): " answer
+
+if [[ $answer =~ ^[Yy]$ ]]; then
+    echo "Searching from root directory. This may take a while..."
+    results=$(perform_search "/")
+    if [ -n "$results" ]; then
+        echo "Results found:"
+        echo "$results"
+    else
+        echo "No results found."
+    fi
+else
+    echo "Search cancelled."
+fi
+
+exit 0
