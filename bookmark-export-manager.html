@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+    <!-- Previous head and style sections remain the same -->
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>
+            Bookmark Editor
+        </title>
+        <style>
+        /* Previous styles remain the same */
+        :root {
+            --bg-color: #fff;
+            --text-color: #333;
+            --header-bg: #f0f0f0;
+            --border-color: #ddd;
+        }
+
+        .dark-mode {
+            --bg-color: #222;
+            --text-color: #eee;
+            --header-bg: #333;
+            --border-color: #444;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .stats {
+            width: 100%;
+            padding: 15px;
+            background-color: var(--header-bg);
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .dark-mode-toggle, .save-button, .dedupe-button {
+            padding: 8px 16px;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .dark-mode-toggle {
+            background: #666;
+        }
+
+        .save-button {
+            background: #28a745;
+        }
+
+        .save-button:hover {
+            background: #218838;
+        }
+
+        .dedupe-button {
+            background: #17a2b8;
+        }
+
+        .dedupe-button:hover {
+            background: #138496;
+        }
+
+        .file-input {
+            flex-grow: 1;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: var(--header-bg);
+            cursor: pointer;
+        }
+
+        th:hover {
+            background-color: var(--border-color);
+        }
+
+        .truncate {
+            max-width: 400px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: inline-block;
+            width: 60%;
+        }
+
+        a {
+            color: var(--text-color);
+            text-decoration: none;
+        }
+
+        .dark-mode a {
+            color: var(--text-color);
+        }
+
+        .domain-tld {
+            color: #0066cc;
+            font-weight: bold;
+        }
+
+        .dark-mode .domain-tld {
+            color: #66b3ff;
+        }
+
+        tr:hover {
+            background-color: var(--header-bg);
+        }
+
+        .delete-btn {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .delete-btn:hover {
+            background: #ff0000;
+        }
+
+        .domain-tld {
+            font-weight: bold;
+        }
+
+        /* Add a notice for unsaved changes */
+        .unsaved-changes {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #ffc107;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        </style>
+    </head>
+    <body>
+        <div class="unsaved-changes" id="unsavedNotice">
+            You have unsaved changes!
+        </div>
+        <div class="stats" id="statsDisplay"></div>
+        <div class="controls">
+            <button class="dark-mode-toggle" onclick="toggleDarkMode()">Toggle Dark Mode</button> <input type="file" class="file-input" accept=".html" onchange="handleFileSelect(event)" id="fileInput"> <button class="save-button" onclick="saveBookmarks()">Save Bookmarks</button> <button class="dedupe-button" onclick="deduplicateBookmarks()">Deduplicate</button>
+        </div>
+        <table id="bookmarkTable">
+            <thead>
+                <tr>
+                    <th onclick="sortTable(0)">
+                        #
+                    </th>
+                    <th onclick="sortTable(1)">
+                        URL
+                    </th>
+                    <th onclick="sortTable(2)">
+                        Title
+                    </th>
+                    <th onclick="sortTable(3)">
+                        Added Date
+                    </th>
+                    <th onclick="sortTable(4)">
+                        Last Modified
+                    </th>
+                    <th>
+                        Actions
+                    </th>
+                </tr>
+            </thead>
+            <tbody id="bookmarkBody"></tbody>
+        </table>
+        <script>
+        let oldestTimestamp = Infinity;
+        let newestTimestamp = 0;
+        let currentFileName = '';
+        let originalOrder = [];
+        let hasUnsavedChanges = false;
+
+        // Load dark mode preference
+        if (localStorage.getItem('darkMode') === 'true') {
+            document.body.classList.add('dark-mode');
+        }
+
+        function setUnsavedChanges(value) {
+            hasUnsavedChanges = value;
+            document.getElementById('unsavedNotice').style.display = value ? 'block' : 'none';
+        }
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            localStorage.setItem('darkMode', document.body.classList.contains('dark-mode'));
+        }
+
+        function formatDate(timestamp) {
+            return new Date(timestamp * 1000).toLocaleString();
+        }
+
+        function formatDomain(url) {
+            try {
+                const urlObj = new URL(url);
+                const domain = urlObj.hostname;
+                const parts = domain.split('.');
+                if (parts.length >= 2) {
+                    const tld = parts.slice(-2).join('.');
+                    const mainDomain = parts.slice(0, -2).join('.');
+                    const formattedDomain = mainDomain ? 
+                        `${mainDomain}.<span class="domain-tld">${tld}</span>` : 
+                        `<span class="domain-tld">${tld}</span>`;
+            
+                    // Split URL into parts and replace domain
+                    const preUrl = url.substring(0, url.indexOf(domain));
+                    const postUrl = url.substring(url.indexOf(domain) + domain.length);
+                    return preUrl + formattedDomain + postUrl;
+                }
+                return url;
+            } catch {
+                return url;
+            }
+        }
+
+        function getDomain(url) {
+            try {
+                return new URL(url).hostname;
+            } catch {
+                return url;
+            }
+        }
+
+        function truncateText(text, maxLength = 100) {
+            return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+        }
+
+        // Save bookmarks to localStorage
+        function saveToLocalStorage() {
+            const tbody = document.getElementById('bookmarkBody');
+            const rows = Array.from(tbody.getElementsByTagName('tr'));
+            const bookmarks = rows.map(row => {
+                const anchor = row.querySelector('a');
+                return {
+                    href: anchor.href,
+                    title: row.cells[2].textContent,
+                    addDate: anchor.getAttribute('ADD_DATE'),
+                    lastModified: anchor.getAttribute('LAST_MODIFIED'),
+                    originalIndex: row.getAttribute('data-original-index')
+                };
+            });
+            
+            localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
+            setUnsavedChanges(false);
+        }
+
+        // Load bookmarks from localStorage
+        function loadFromLocalStorage() {
+            const savedBookmarks = localStorage.getItem('bookmarks');
+            if (savedBookmarks) {
+                const bookmarks = JSON.parse(savedBookmarks);
+                displayBookmarks(bookmarks.map((b, i) => ({
+                    ...b,
+                    number: i + 1
+                })));
+                return true;
+            }
+            return false;
+        }
+
+        function renumberRows() {
+            const tbody = document.getElementById('bookmarkBody');
+            const rows = Array.from(tbody.getElementsByTagName('tr'));
+            
+            originalOrder = rows.map(row => {
+                const originalIndex = parseInt(row.getAttribute('data-original-index'));
+                return originalIndex;
+            });
+
+            rows.forEach((row, idx) => {
+                row.cells[0].textContent = idx + 1;
+            });
+            
+            setUnsavedChanges(true);
+            saveToLocalStorage();
+        }
+
+        function deleteRow(button) {
+            const row = button.closest('tr');
+            const anchor = row.querySelector('a');
+            const addDate = parseInt(anchor.getAttribute('ADD_DATE'));
+
+            if (addDate === oldestTimestamp || addDate === newestTimestamp) {
+                const tbody = document.getElementById('bookmarkBody');
+                const timestamps = Array.from(tbody.getElementsByTagName('tr'))
+                    .filter(r => r !== row)
+                    .map(r => parseInt(r.querySelector('a').getAttribute('ADD_DATE')))
+                    .filter(t => !isNaN(t));
+
+                if (timestamps.length > 0) {
+                    oldestTimestamp = Math.min(...timestamps);
+                    newestTimestamp = Math.max(...timestamps);
+                } else {
+                    oldestTimestamp = Infinity;
+                    newestTimestamp = 0;
+                }
+            }
+
+            row.remove();
+            updateStats();
+            renumberRows();
+            setUnsavedChanges(true);
+            saveToLocalStorage();
+        }
+
+        // Previous updateStats function remains the same
+        function updateStats() {
+            const tbody = document.getElementById('bookmarkBody');
+            const rows = Array.from(tbody.getElementsByTagName('tr'));
+
+            if (rows.length === 0) {
+                document.getElementById('statsDisplay').innerHTML = 'No bookmarks loaded';
+                return;
+            }
+
+            const timestamps = rows.map(row => {
+                const anchor = row.querySelector('a');
+                const addDate = anchor.getAttribute('ADD_DATE');
+                return parseInt(addDate);
+            }).filter(timestamp => !isNaN(timestamp));
+
+            if (timestamps.length === 0) {
+                document.getElementById('statsDisplay').innerHTML = 'Error: No valid timestamps found';
+                return;
+            }
+
+            const minTimestamp = Math.min(...timestamps);
+            const maxTimestamp = Math.max(...timestamps);
+
+            document.getElementById('statsDisplay').innerHTML = `
+                Total Bookmarks: ${rows.length} | 
+                Oldest: ${formatDate(minTimestamp)} | 
+                Newest: ${formatDate(maxTimestamp)}
+            `;
+        }
+
+        function deduplicateBookmarks() {
+            const tbody = document.getElementById('bookmarkBody');
+            const rows = Array.from(tbody.getElementsByTagName('tr'));
+            const seen = new Map();
+            let duplicatesRemoved = 0;
+
+            rows.forEach((row) => {
+                const url = row.querySelector('a').href;
+                if (seen.has(url)) {
+                    row.remove();
+                    duplicatesRemoved++;
+                } else {
+                    seen.set(url, true);
+                }
+            });
+
+            renumberRows();
+            updateStats();
+            setUnsavedChanges(true);
+            saveToLocalStorage();
+            alert(`Removed ${duplicatesRemoved} duplicate bookmark${duplicatesRemoved !== 1 ? 's' : ''}`);
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            currentFileName = file.name;
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                const content = e.target.result;
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(content, 'text/html');
+                const bookmarks = Array.from(doc.getElementsByTagName('dt'));
+                
+                const bookmarkData = bookmarks.map((dt, index) => {
+                    const anchor = dt.querySelector('a');
+                    if (!anchor) return null;
+
+                    return {
+                        number: index + 1,
+                        href: anchor.getAttribute('href') || '',
+                        title: anchor.textContent || '',
+                        addDate: anchor.getAttribute('ADD_DATE') || '',
+                        lastModified: anchor.getAttribute('LAST_MODIFIED') || '',
+                        originalIndex: index
+                    };
+                }).filter(Boolean);
+
+                displayBookmarks(bookmarkData);
+                setUnsavedChanges(true);
+                saveToLocalStorage();
+            };
+
+            reader.readAsText(file);
+        }
+
+        function displayBookmarks(bookmarks) {
+            const tbody = document.getElementById('bookmarkBody');
+            tbody.innerHTML = '';
+
+            oldestTimestamp = Infinity;
+            newestTimestamp = 0;
+            originalOrder = [];
+
+            bookmarks.forEach((bookmark, index) => {
+                const addDate = parseInt(bookmark.addDate);
+                oldestTimestamp = Math.min(oldestTimestamp, addDate);
+                newestTimestamp = Math.max(newestTimestamp, addDate);
+
+                originalOrder.push(index);
+
+                const row = document.createElement('tr');
+                row.setAttribute('data-original-index', index);
+                row.innerHTML = `
+                    <td>${bookmark.number}<\/td>
+                    <td><div class="truncate" title="${bookmark.href}">
+                        <a href="${bookmark.href}" target="_blank" ADD_DATE="${bookmark.addDate}">${formatDomain(bookmark.href)}<\/a>
+                    <\/div><\/td>
+                    <td><div class="truncate" title="${bookmark.title}">${truncateText(bookmark.title)}<\/div><\/td>
+                    <td>${formatDate(bookmark.addDate)}<\/td>
+                    <td>${formatDate(bookmark.lastModified)}<\/td>
+                    <td><button class="delete-btn" onclick="deleteRow(this)">Delete<\/button><\/td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            updateStats();
+        }
+
+        // Previous saveBookmarks function remains largely the same
+        function saveBookmarks() {
+            const tbody = document.getElementById('bookmarkBody');
+            const rows = Array.from(tbody.getElementsByTagName('tr'));
+            
+            let bookmarksHtml = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+            <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+            <TITLE>Bookmarks<\/TITLE>
+            <H1>Bookmarks<\/H1>
+            <DL><p>\n`;
+
+            rows.forEach(row => {
+                const anchor = row.querySelector('a');
+                const url = anchor.href;
+                const title = row.cells[2].textContent;
+                const addDate = anchor.getAttribute('ADD_DATE');
+                const lastModified = new Date(row.cells[4].textContent).getTime() / 1000;
+
+                bookmarksHtml += `    <DT><A HREF="${url}" ADD_DATE="${addDate}" LAST_MODIFIED="${lastModified}">${title}<\/A>\n`;
+            });
+
+            bookmarksHtml += '<\/DL><p>';
+
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const newFileName = currentFileName.replace('.html', '') + '_modified_' + timestamp + '.html';
+
+            const blob = new Blob([bookmarksHtml], { type: 'text/html' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = newFileName;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+                        setUnsavedChanges(false);
+                        saveToLocalStorage();
+                    }
+
+                    let currentSortColumn = null;
+                    let sortAscending = true;
+
+                    function sortTable(columnIndex) {
+                        const tbody = document.getElementById('bookmarkBody');
+                        const rows = Array.from(tbody.getElementsByTagName('tr'));
+
+                        if (currentSortColumn === columnIndex) {
+                            sortAscending = !sortAscending;
+                        } else {
+                            sortAscending = true;
+                            currentSortColumn = columnIndex;
+                        }
+
+                        rows.sort((a, b) => {
+                            // For the number column, sort by original index
+                            if (columnIndex === 0) {
+                                const aIndex = parseInt(a.getAttribute('data-original-index'));
+                                const bIndex = parseInt(b.getAttribute('data-original-index'));
+                                return sortAscending ? aIndex - bIndex : bIndex - aIndex;
+                            }
+
+                            let aValue = a.cells[columnIndex].textContent;
+                            let bValue = b.cells[columnIndex].textContent;
+
+                            if (columnIndex === 1) {
+                                aValue = getDomain(a.cells[columnIndex].querySelector('a').href);
+                                bValue = getDomain(b.cells[columnIndex].querySelector('a').href);
+                            }
+
+                            return sortAscending ? 
+                                aValue.localeCompare(bValue) :
+                                bValue.localeCompare(aValue);
+                        });
+
+                        rows.forEach(row => tbody.appendChild(row));
+                    }
+
+                    // Initialize stats display and load saved bookmarks
+                    document.addEventListener('DOMContentLoaded', function() {
+                        document.getElementById('statsDisplay').innerHTML = 'No bookmarks loaded';
+                        if (!loadFromLocalStorage()) {
+                            console.log('No saved bookmarks found');
+                        }
+                    });
+
+                    // Add window beforeunload event to warn about unsaved changes
+                    window.addEventListener('beforeunload', function(e) {
+                        if (hasUnsavedChanges) {
+                            e.preventDefault();
+                            e.returnValue = '';
+                        }
+                    });
+        </script>
+    </body>
+</html>
